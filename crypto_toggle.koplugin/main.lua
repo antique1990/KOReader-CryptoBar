@@ -1,4 +1,4 @@
--- CRYPTO PRICE PLUGIN - 居中显示 + 请求计数 + 价格变化才写入
+-- CRYPTO PRICE PLUGIN - TOP 100 币种 + 最多选10个 + 换行显示
 
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local UIManager = require("ui/uimanager")
@@ -17,17 +17,110 @@ local DataStorage = require("datastorage")
 -- 默认配置
 -- ============================================================
 local DEFAULT_INTERVAL = 30
-local DEFAULT_COINS = {"BTC_USDT", "ETH_USDT", "DOGE_USDT", "UNI_USDT"}
+local MAX_SELECTED_COINS = 10  -- ⭐ 最多选 10 个
 
+-- ⭐ TOP 100 热门币种（按交易量排序）
 local ALL_COINS = {
     {display = "BTC", pair = "BTC_USDT"},
     {display = "ETH", pair = "ETH_USDT"},
     {display = "DOGE", pair = "DOGE_USDT"},
+    {display = "SOL", pair = "SOL_USDT"},
+    {display = "XRP", pair = "XRP_USDT"},
+    {display = "ADA", pair = "ADA_USDT"},
+    {display = "AVAX", pair = "AVAX_USDT"},
+    {display = "DOT", pair = "DOT_USDT"},
+    {display = "LINK", pair = "LINK_USDT"},
+    {display = "MATIC", pair = "MATIC_USDT"},
+    {display = "LTC", pair = "LTC_USDT"},
+    {display = "BCH", pair = "BCH_USDT"},
+    {display = "NEAR", pair = "NEAR_USDT"},
+    {display = "ATOM", pair = "ATOM_USDT"},
+    {display = "ETC", pair = "ETC_USDT"},
     {display = "UNI", pair = "UNI_USDT"},
     {display = "OP", pair = "OP_USDT"},
-    {display = "LDO", pair = "LDO_USDT"},
+    {display = "ARB", pair = "ARB_USDT"},
+    {display = "APT", pair = "APT_USDT"},
+    {display = "INJ", pair = "INJ_USDT"},
+    {display = "ICP", pair = "ICP_USDT"},
+    {display = "FIL", pair = "FIL_USDT"},
+    {display = "RNDR", pair = "RNDR_USDT"},
+    {display = "GRT", pair = "GRT_USDT"},
+    {display = "VET", pair = "VET_USDT"},
+    {display = "THETA", pair = "THETA_USDT"},
+    {display = "FTM", pair = "FTM_USDT"},
+    {display = "RUNE", pair = "RUNE_USDT"},
+    {display = "ALGO", pair = "ALGO_USDT"},
+    {display = "EGLD", pair = "EGLD_USDT"},
+    {display = "HNT", pair = "HNT_USDT"},
+    {display = "MNT", pair = "MNT_USDT"},
+    {display = "CRO", pair = "CRO_USDT"},
+    {display = "IMX", pair = "IMX_USDT"},
+    {display = "ASTR", pair = "ASTR_USDT"},
+    {display = "ROSE", pair = "ROSE_USDT"},
+    {display = "MINA", pair = "MINA_USDT"},
+    {display = "METIS", pair = "METIS_USDT"},
+    {display = "WIF", pair = "WIF_USDT"},
+    {display = "PEPE", pair = "PEPE_USDT"},
+    {display = "SUI", pair = "SUI_USDT"},
+    {display = "CKB", pair = "CKB_USDT"},
+    {display = "JASMY", pair = "JASMY_USDT"},
+    {display = "ORDI", pair = "ORDI_USDT"},
+    {display = "AGIX", pair = "AGIX_USDT"},
+    {display = "FET", pair = "FET_USDT"},
+    {display = "BEAM", pair = "BEAM_USDT"},
+    {display = "TRX", pair = "TRX_USDT"},
+    {display = "MKR", pair = "MKR_USDT"},
     {display = "WLD", pair = "WLD_USDT"},
+    {display = "AAVE", pair = "AAVE_USDT"},
+    {display = "KAS", pair = "KAS_USDT"},
+    {display = "BONK", pair = "BONK_USDT"},
+    {display = "SAND", pair = "SAND_USDT"},
+    {display = "GALA", pair = "GALA_USDT"},
+    {display = "TIA", pair = "TIA_USDT"},
+    {display = "FLOKI", pair = "FLOKI_USDT"},
+    {display = "SEI", pair = "SEI_USDT"},
+    {display = "ENA", pair = "ENA_USDT"},
+    {display = "STRK", pair = "STRK_USDT"},
+    {display = "PYTH", pair = "PYTH_USDT"},
+    {display = "OSMO", pair = "OSMO_USDT"},
+    {display = "JUP", pair = "JUP_USDT"},
+    {display = "ONDO", pair = "ONDO_USDT"},
+    {display = "ZRO", pair = "ZRO_USDT"},
+    {display = "PENDLE", pair = "PENDLE_USDT"},
+    {display = "W", pair = "W_USDT"},
+    {display = "EOS", pair = "EOS_USDT"},
+    {display = "XLM", pair = "XLM_USDT"},
+    {display = "XMR", pair = "XMR_USDT"},
+    {display = "ZEC", pair = "ZEC_USDT"},
+    {display = "LDO", pair = "LDO_USDT"},
+    {display = "TWT", pair = "TWT_USDT"},
+    {display = "CAKE", pair = "CAKE_USDT"},
+    {display = "AXS", pair = "AXS_USDT"},
+    {display = "MANA", pair = "MANA_USDT"},
+    {display = "QNT", pair = "QNT_USDT"},
+    {display = "CHZ", pair = "CHZ_USDT"},
+    {display = "1INCH", pair = "1INCH_USDT"},
+    {display = "LUNC", pair = "LUNC_USDT"},
+    {display = "FLOW", pair = "FLOW_USDT"},
+    {display = "COMP", pair = "COMP_USDT"},
+    {display = "NEO", pair = "NEO_USDT"},
+    {display = "XTZ", pair = "XTZ_USDT"},
+    {display = "IOTA", pair = "IOTA_USDT"},
+    {display = "KAVA", pair = "KAVA_USDT"},
+    {display = "BTT", pair = "BTT_USDT"},
+    {display = "NOT", pair = "NOT_USDT"},
+    {display = "DOGS", pair = "DOGS_USDT"},
+    {display = "HMSTR", pair = "HMSTR_USDT"},
+    {display = "TON", pair = "TON_USDT"},
+    {display = "PEOPLE", pair = "PEOPLE_USDT"},
+    {display = "MEME", pair = "MEME_USDT"},
+    {display = "ALT", pair = "ALT_USDT"},
+    {display = "PHA", pair = "PHA_USDT"},
+    {display = "JTO", pair = "JTO_USDT"},
 }
+
+-- ⭐ 默认选中 4 个主流币种
+local DEFAULT_COINS = {"BTC_USDT", "ETH_USDT", "DOGE_USDT", "SOL_USDT"}
 
 local CACHE_FILE = DataStorage:getDataDir() .. "/crypto_price.txt"
 
@@ -36,7 +129,7 @@ local CACHE_FILE = DataStorage:getDataDir() .. "/crypto_price.txt"
 -- ============================================================
 if G_crypto_data == nil then
     G_crypto_data = {
-        text = "BTC: —  ETH: —  DOGE: —  UNI: —",
+        text = "BTC: —  ETH: —  DOGE: —  SOL: —",
         enabled = true,
         interval = DEFAULT_INTERVAL,
         selected_coins = DEFAULT_COINS,
@@ -102,15 +195,48 @@ function CryptoPlugin:init()
 end
 
 -- ============================================================
--- 获取显示文本（价格 + 计数）
+-- ⭐ 格式化显示文本（超过 5 个自动换行）
 -- ============================================================
 function CryptoPlugin:getDisplayText()
     local count_str = " #" .. G_crypto_data.request_count
-    return G_crypto_data.price_text .. count_str
+    local text = G_crypto_data.price_text
+    
+    -- 统计当前显示了多少个币种
+    local num_coins = #G_crypto_data.selected_coins
+    
+    -- 超过 5 个时，在中间插入换行
+    if num_coins > 5 then
+        local parts = {}
+        local selected_displays = {}
+        for _, target in ipairs(G_crypto_data.selected_coins) do
+            local symbol = target:gsub("_USDT", "")
+            table.insert(selected_displays, symbol)
+        end
+        
+        -- 前 5 个一行，后面的第二行
+        local first_line = {}
+        local second_line = {}
+        for i, symbol in ipairs(selected_displays) do
+            if i <= 5 then
+                table.insert(first_line, symbol)
+            else
+                table.insert(second_line, symbol)
+            end
+        end
+        
+        -- 构建显示文本，价格会单独显示
+        -- 但由于我们的 price_text 已经是 "BTC: 123  ETH: 456 ..." 格式，
+        -- 换行需要在币种之间插入，比较复杂。
+        -- 我们用简单的两行显示：第一行价格，第二行计数
+        -- 实际上更好的方式是保持原样，让系统自动换行
+        -- 或者把计数放在单独一行
+    end
+    
+    return text .. count_str
 end
 
 -- ============================================================
--- paintTo：居中显示
+-- paintTo：居中显示，支持长文本自动换行
 -- ============================================================
 function CryptoPlugin:paintTo(bb, x, y)
     if not G_crypto_data.enabled then
@@ -119,17 +245,94 @@ function CryptoPlugin:paintTo(bb, x, y)
     
     local display_text = self:getDisplayText()
     
-    if self.last_painted_text ~= display_text then
-        self.text_widget:setText(BD.auto(display_text:gsub(" ", "\u{00A0}")))
-        self.last_painted_text = display_text
+    -- 如果文本太长，分成两行显示
+    local num_coins = #G_crypto_data.selected_coins
+    
+    if num_coins <= 5 then
+        -- 5 个以内：单行显示
+        if self.last_painted_text ~= display_text then
+            self.text_widget:setText(BD.auto(display_text:gsub(" ", "\u{00A0}")))
+            self.last_painted_text = display_text
+        end
+        local widget_width = self.text_widget:getSize().w or 300
+        local screen_width = bb:getWidth()
+        local center_x = (screen_width - widget_width) / 2
+        self.text_widget:paintTo(bb, center_x + x, self.top_padding + y)
+    else
+        -- ⭐ 超过 5 个：分成两行显示
+        -- 第一行：前 5 个币种
+        -- 第二行：剩余币种 + 计数
+        local selected_displays = {}
+        local price_parts = {}
+        for _, target in ipairs(G_crypto_data.selected_coins) do
+            local symbol = target:gsub("_USDT", "")
+            table.insert(selected_displays, symbol)
+        end
+        
+        -- 从 price_text 中提取价格
+        -- price_text 格式: "BTC: 123  ETH: 456  DOGE: 0.12  SOL: 89"
+        -- 我们按空格分割，重新组合
+        local price_data = {}
+        for part in G_crypto_data.price_text:gmatch("[^%s]+") do
+            table.insert(price_data, part)
+        end
+        
+        -- 构建两行
+        local first_line_parts = {}
+        local second_line_parts = {}
+        local price_idx = 1
+        
+        for i, symbol in ipairs(selected_displays) do
+            -- 找到对应的价格（格式：symbol: 价格）
+            local price_part = ""
+            for j = price_idx, #price_data do
+                if price_data[j] == symbol .. ":" then
+                    price_part = symbol .. ": " .. (price_data[j+1] or "—")
+                    price_idx = j + 2
+                    break
+                end
+            end
+            if price_part == "" then
+                price_part = symbol .. ": —"
+            end
+            
+            if i <= 5 then
+                table.insert(first_line_parts, price_part)
+            else
+                table.insert(second_line_parts, price_part)
+            end
+        end
+        
+        local first_line = table.concat(first_line_parts, "  ")
+        local second_line = table.concat(second_line_parts, "  ") .. " #" .. G_crypto_data.request_count
+        
+        -- 绘制第一行
+        local widget1 = TextWidget:new{
+            text = BD.auto(first_line:gsub(" ", "\u{00A0}")),
+            face = Font:getFace("ffont", 19),
+            fgcolor = Blitbuffer.COLOR_BLACK,
+            padding = 0,
+        }
+        local w1 = widget1:getSize().w or 300
+        local screen_width = bb:getWidth()
+        local cx1 = (screen_width - w1) / 2
+        widget1:paintTo(bb, cx1 + x, self.top_padding + y)
+        
+        -- 绘制第二行（下移一行的高度）
+        local widget2 = TextWidget:new{
+            text = BD.auto(second_line:gsub(" ", "\u{00A0}")),
+            face = Font:getFace("ffont", 19),
+            fgcolor = Blitbuffer.COLOR_BLACK,
+            padding = 0,
+        }
+        local w2 = widget2:getSize().w or 300
+        local cx2 = (screen_width - w2) / 2
+        local line_height = (widget1:getSize().h or 30) + 4
+        widget2:paintTo(bb, cx2 + x, self.top_padding + y + line_height)
+        
+        -- 更新 last_painted_text 避免重复创建
+        self.last_painted_text = first_line .. second_line
     end
-    
-    -- ⭐ 居中显示
-    local widget_width = self.text_widget:getSize().w or 300
-    local screen_width = bb:getWidth()
-    local center_x = (screen_width - widget_width) / 2
-    
-    self.text_widget:paintTo(bb, center_x + x, self.top_padding + y)
 end
 
 -- ============================================================
@@ -137,10 +340,9 @@ end
 -- ============================================================
 function CryptoPlugin:updateText(new_text)
     if not new_text or new_text == "" then
-        new_text = "BTC: —  ETH: —  DOGE: —  UNI: —"
+        new_text = "BTC: —  ETH: —  DOGE: —  SOL: —"
     end
     
-    -- 只有价格变化时才更新
     if new_text == G_crypto_data.last_price_text then
         return
     end
@@ -200,8 +402,6 @@ function CryptoPlugin:doFetch()
     end
 
     G_crypto_data.fetch_in_progress = true
-
-    -- ⭐ 请求计数 +1
     G_crypto_data.request_count = G_crypto_data.request_count + 1
 
     local cmd = 'curl -s -m 5 "https://api.gateio.ws/api/v4/spot/tickers" > "' .. CACHE_FILE .. '" 2>/dev/null &'
@@ -283,7 +483,7 @@ function CryptoPlugin:onCloseDocument()
 end
 
 -- ============================================================
--- 币种选择
+-- 币种选择（限制最多 10 个）
 -- ============================================================
 function CryptoPlugin:buildCoinSelectionMenu()
     local sub_items = {}
@@ -305,9 +505,18 @@ function CryptoPlugin:buildCoinSelectionMenu()
                         break
                     end
                 end
+                
                 if not found then
+                    -- ⭐ 检查是否已达到上限
+                    if #G_crypto_data.selected_coins >= MAX_SELECTED_COINS then
+                        UIManager:show(InfoMessage:new{
+                            text = "⚠️ 最多选择 " .. MAX_SELECTED_COINS .. " 个币种"
+                        })
+                        return
+                    end
                     table.insert(G_crypto_data.selected_coins, coin.pair)
                 end
+                
                 self:doFetch()
                 UIManager:show(InfoMessage:new{
                     text = "✅ 币种已更新，共 " .. #G_crypto_data.selected_coins .. " 个"
@@ -359,7 +568,7 @@ function CryptoPlugin:addToMainMenu(menu_items)
                 },
             },
             {
-                text = "选择币种 (" .. #G_crypto_data.selected_coins .. "个)",
+                text = "选择币种 (" .. #G_crypto_data.selected_coins .. "/" .. MAX_SELECTED_COINS .. "个)",
                 sub_item_table = self:buildCoinSelectionMenu(),
             },
             {
