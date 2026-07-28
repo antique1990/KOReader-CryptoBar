@@ -124,7 +124,7 @@ Crypto Price 是一个 KOReader 插件，在阅读书籍时于屏幕顶部居中
 
 ### 新增
 - 初始版本发布
-- 支持 BTC/ETH/DOGE/UNI/OP/LDO/WLD 七种币种
+- 支持 BTC/ETH/DOGE/UNI/OP/LDO/WLD 100种币种
 - 居中显示价格信息
 - 请求次数计数（#N 标记）
 - 多种刷新间隔选项
