@@ -17,9 +17,9 @@ local DataStorage = require("datastorage")
 -- 默认配置
 -- ============================================================
 local DEFAULT_INTERVAL = 30
-local MAX_SELECTED_COINS = 10  -- ⭐ 最多选 10 个
+local MAX_SELECTED_COINS = 10
 
--- ⭐ TOP 100 热门币种（按交易量排序）
+-- TOP 100 热门币种
 local ALL_COINS = {
     {display = "BTC", pair = "BTC_USDT"},
     {display = "ETH", pair = "ETH_USDT"},
@@ -119,30 +119,51 @@ local ALL_COINS = {
     {display = "JTO", pair = "JTO_USDT"},
 }
 
--- ⭐ 默认选中 4 个主流币种
 local DEFAULT_COINS = {"BTC_USDT", "ETH_USDT", "DOGE_USDT", "SOL_USDT"}
-
 local CACHE_FILE = DataStorage:getDataDir() .. "/crypto_price.txt"
+
+-- ============================================================
+-- 根据 selected_coins 生成默认显示文本
+-- ============================================================
+local function generateDefaultText(coins)
+    local parts = {}
+    for _, target in ipairs(coins) do
+        local symbol = target:gsub("_USDT", "")
+        table.insert(parts, symbol .. ": —")
+    end
+    return table.concat(parts, "  ")
+end
 
 -- ============================================================
 -- 全局状态
 -- ============================================================
+local saved_coins = G_reader_settings:readSetting("crypto_selected_coins", DEFAULT_COINS)
+
 if G_crypto_data == nil then
     G_crypto_data = {
-        text = "BTC: —  ETH: —  DOGE: —  SOL: —",
+        text = generateDefaultText(saved_coins),
         enabled = true,
         interval = DEFAULT_INTERVAL,
-        selected_coins = DEFAULT_COINS,
+        selected_coins = saved_coins,
         timer_id = nil,
         fetch_in_progress = false,
         has_curl = false,
         curl_checked = false,
         is_suspended = false,
         is_document_closed = false,
-        price_text = "",
+        price_text = generateDefaultText(saved_coins),
         last_price_text = "",
         request_count = 0,
     }
+else
+    -- 如果已有数据，同步更新 text 和 price_text
+    if G_crypto_data.selected_coins then
+        local default_text = generateDefaultText(G_crypto_data.selected_coins)
+        G_crypto_data.text = default_text
+        if not G_crypto_data.price_text or G_crypto_data.price_text == "" then
+            G_crypto_data.price_text = default_text
+        end
+    end
 end
 
 -- ============================================================
@@ -155,6 +176,16 @@ local CryptoPlugin = WidgetContainer:extend{
 
 function CryptoPlugin:init()
     self.ui.menu:registerToMainMenu(self)
+    CryptoPlugin.instance = self
+
+    -- 退出后重新进入，重置状态
+    if G_crypto_data.is_document_closed then
+        G_crypto_data.is_document_closed = false
+        G_crypto_data.request_count = 0
+        G_crypto_data.price_text = G_crypto_data.text
+        G_crypto_data.last_price_text = G_crypto_data.text
+        G_crypto_data.fetch_in_progress = false
+    end
 
     if not G_crypto_data.curl_checked then
         G_crypto_data.curl_checked = true
@@ -184,8 +215,6 @@ function CryptoPlugin:init()
         self.ui.view:registerViewModule("crypto_overlay", self)
     end
 
-    G_crypto_data.is_document_closed = false
-
     if G_crypto_data.enabled and not G_crypto_data.is_suspended then
         UIManager:scheduleIn(2, function()
             self:startLoop()
@@ -195,48 +224,13 @@ function CryptoPlugin:init()
 end
 
 -- ============================================================
--- ⭐ 格式化显示文本（超过 5 个自动换行）
--- ============================================================
 function CryptoPlugin:getDisplayText()
     local count_str = " #" .. G_crypto_data.request_count
-    local text = G_crypto_data.price_text
-    
-    -- 统计当前显示了多少个币种
-    local num_coins = #G_crypto_data.selected_coins
-    
-    -- 超过 5 个时，在中间插入换行
-    if num_coins > 5 then
-        local parts = {}
-        local selected_displays = {}
-        for _, target in ipairs(G_crypto_data.selected_coins) do
-            local symbol = target:gsub("_USDT", "")
-            table.insert(selected_displays, symbol)
-        end
-        
-        -- 前 5 个一行，后面的第二行
-        local first_line = {}
-        local second_line = {}
-        for i, symbol in ipairs(selected_displays) do
-            if i <= 5 then
-                table.insert(first_line, symbol)
-            else
-                table.insert(second_line, symbol)
-            end
-        end
-        
-        -- 构建显示文本，价格会单独显示
-        -- 但由于我们的 price_text 已经是 "BTC: 123  ETH: 456 ..." 格式，
-        -- 换行需要在币种之间插入，比较复杂。
-        -- 我们用简单的两行显示：第一行价格，第二行计数
-        -- 实际上更好的方式是保持原样，让系统自动换行
-        -- 或者把计数放在单独一行
-    end
-    
-    return text .. count_str
+    return G_crypto_data.price_text .. count_str
 end
 
 -- ============================================================
--- paintTo：居中显示，支持长文本自动换行
+-- paintTo：居中显示
 -- ============================================================
 function CryptoPlugin:paintTo(bb, x, y)
     if not G_crypto_data.enabled then
@@ -244,12 +238,9 @@ function CryptoPlugin:paintTo(bb, x, y)
     end
     
     local display_text = self:getDisplayText()
-    
-    -- 如果文本太长，分成两行显示
     local num_coins = #G_crypto_data.selected_coins
     
     if num_coins <= 5 then
-        -- 5 个以内：单行显示
         if self.last_painted_text ~= display_text then
             self.text_widget:setText(BD.auto(display_text:gsub(" ", "\u{00A0}")))
             self.last_painted_text = display_text
@@ -259,31 +250,23 @@ function CryptoPlugin:paintTo(bb, x, y)
         local center_x = (screen_width - widget_width) / 2
         self.text_widget:paintTo(bb, center_x + x, self.top_padding + y)
     else
-        -- ⭐ 超过 5 个：分成两行显示
-        -- 第一行：前 5 个币种
-        -- 第二行：剩余币种 + 计数
+        -- 超过5个分两行
         local selected_displays = {}
-        local price_parts = {}
         for _, target in ipairs(G_crypto_data.selected_coins) do
             local symbol = target:gsub("_USDT", "")
             table.insert(selected_displays, symbol)
         end
         
-        -- 从 price_text 中提取价格
-        -- price_text 格式: "BTC: 123  ETH: 456  DOGE: 0.12  SOL: 89"
-        -- 我们按空格分割，重新组合
         local price_data = {}
         for part in G_crypto_data.price_text:gmatch("[^%s]+") do
             table.insert(price_data, part)
         end
         
-        -- 构建两行
         local first_line_parts = {}
         local second_line_parts = {}
         local price_idx = 1
         
         for i, symbol in ipairs(selected_displays) do
-            -- 找到对应的价格（格式：symbol: 价格）
             local price_part = ""
             for j = price_idx, #price_data do
                 if price_data[j] == symbol .. ":" then
@@ -306,7 +289,6 @@ function CryptoPlugin:paintTo(bb, x, y)
         local first_line = table.concat(first_line_parts, "  ")
         local second_line = table.concat(second_line_parts, "  ") .. " #" .. G_crypto_data.request_count
         
-        -- 绘制第一行
         local widget1 = TextWidget:new{
             text = BD.auto(first_line:gsub(" ", "\u{00A0}")),
             face = Font:getFace("ffont", 19),
@@ -318,7 +300,6 @@ function CryptoPlugin:paintTo(bb, x, y)
         local cx1 = (screen_width - w1) / 2
         widget1:paintTo(bb, cx1 + x, self.top_padding + y)
         
-        -- 绘制第二行（下移一行的高度）
         local widget2 = TextWidget:new{
             text = BD.auto(second_line:gsub(" ", "\u{00A0}")),
             face = Font:getFace("ffont", 19),
@@ -330,7 +311,6 @@ function CryptoPlugin:paintTo(bb, x, y)
         local line_height = (widget1:getSize().h or 30) + 4
         widget2:paintTo(bb, cx2 + x, self.top_padding + y + line_height)
         
-        -- 更新 last_painted_text 避免重复创建
         self.last_painted_text = first_line .. second_line
     end
 end
@@ -340,7 +320,7 @@ end
 -- ============================================================
 function CryptoPlugin:updateText(new_text)
     if not new_text or new_text == "" then
-        new_text = "BTC: —  ETH: —  DOGE: —  SOL: —"
+        new_text = generateDefaultText(G_crypto_data.selected_coins)
     end
     
     if new_text == G_crypto_data.last_price_text then
@@ -352,19 +332,35 @@ function CryptoPlugin:updateText(new_text)
 end
 
 -- ============================================================
--- 读取缓存
+-- 读取缓存（带重试）
 -- ============================================================
-function CryptoPlugin:readPriceFromCache()
-    if G_crypto_data.is_document_closed then
-        return
-    end
+function CryptoPlugin:readPriceFromCache(retry_count)
+    retry_count = retry_count or 0
+    
+    if not G_crypto_data.enabled then return end
+    if G_crypto_data.is_document_closed then return end
 
     local file = io.open(CACHE_FILE, "r")
-    if not file then return end
+    if not file then
+        if retry_count < 3 then
+            UIManager:scheduleIn(1, function()
+                self:readPriceFromCache(retry_count + 1)
+            end)
+        end
+        return
+    end
+    
     local content = file:read("*all")
     file:close()
 
-    if not content or content == "" then return end
+    if not content or content == "" then
+        if retry_count < 3 then
+            UIManager:scheduleIn(1, function()
+                self:readPriceFromCache(retry_count + 1)
+            end)
+        end
+        return
+    end
 
     local ok, data = pcall(json.decode, content)
     if not ok or type(data) ~= "table" then return end
@@ -388,7 +384,7 @@ function CryptoPlugin:readPriceFromCache()
 end
 
 -- ============================================================
--- 发起请求
+-- 发起请求（2.5秒后读取 + 重试）
 -- ============================================================
 function CryptoPlugin:doFetch()
     if not G_crypto_data.enabled then return end
@@ -451,16 +447,13 @@ function CryptoPlugin:stopLoop()
 end
 
 -- ============================================================
--- 息屏事件
+-- 息屏/唤醒/退出
 -- ============================================================
 function CryptoPlugin:onSuspend()
     G_crypto_data.is_suspended = true
     self:stopLoop()
 end
 
--- ============================================================
--- 唤醒事件
--- ============================================================
 function CryptoPlugin:onResume()
     G_crypto_data.is_suspended = false
     if G_crypto_data.enabled and not G_crypto_data.is_document_closed then
@@ -471,9 +464,6 @@ function CryptoPlugin:onResume()
     end
 end
 
--- ============================================================
--- 退出书籍
--- ============================================================
 function CryptoPlugin:onCloseDocument()
     G_crypto_data.is_document_closed = true
     self:stopLoop()
@@ -483,7 +473,7 @@ function CryptoPlugin:onCloseDocument()
 end
 
 -- ============================================================
--- 币种选择（限制最多 10 个）
+-- 币种选择（保存到持久化存储）
 -- ============================================================
 function CryptoPlugin:buildCoinSelectionMenu()
     local sub_items = {}
@@ -507,7 +497,6 @@ function CryptoPlugin:buildCoinSelectionMenu()
                 end
                 
                 if not found then
-                    -- ⭐ 检查是否已达到上限
                     if #G_crypto_data.selected_coins >= MAX_SELECTED_COINS then
                         UIManager:show(InfoMessage:new{
                             text = "⚠️ 最多选择 " .. MAX_SELECTED_COINS .. " 个币种"
@@ -516,6 +505,14 @@ function CryptoPlugin:buildCoinSelectionMenu()
                     end
                     table.insert(G_crypto_data.selected_coins, coin.pair)
                 end
+                
+                -- 保存到持久化存储
+                G_reader_settings:saveSetting("crypto_selected_coins", G_crypto_data.selected_coins)
+                
+                -- 更新显示文本
+                G_crypto_data.text = generateDefaultText(G_crypto_data.selected_coins)
+                G_crypto_data.price_text = G_crypto_data.text
+                G_crypto_data.last_price_text = ""
                 
                 self:doFetch()
                 UIManager:show(InfoMessage:new{
@@ -532,7 +529,7 @@ end
 -- ============================================================
 function CryptoPlugin:addToMainMenu(menu_items)
     menu_items.crypto_toggle = {
-        text = _("💰 Crypto Price"),
+        text = _("₿ Crypto Price"),
         sorting_hint = "tools",
         sub_item_table = {
             {
@@ -572,12 +569,12 @@ function CryptoPlugin:addToMainMenu(menu_items)
                 sub_item_table = self:buildCoinSelectionMenu(),
             },
             {
-                text = _("🔄 立即刷新"),
+                text = _("↻ 立即刷新"),
                 callback = function()
                     if G_crypto_data and G_crypto_data.enabled then
                         G_crypto_data.fetch_in_progress = false
                         self:doFetch()
-                        UIManager:show(InfoMessage:new{ text = "🔄 刷新" })
+                        UIManager:show(InfoMessage:new{ text = "↻ 刷新" })
                     else
                         UIManager:show(InfoMessage:new{ text = "⚠️ 请先开启" })
                     end
@@ -586,5 +583,36 @@ function CryptoPlugin:addToMainMenu(menu_items)
         },
     }
 end
+
+-- ============================================================
+-- 全局切换函数（供 Quick Settings 调用）
+-- ============================================================
+function _G.toggleCryptoPrice()
+    if not G_crypto_data then return end
+    
+    G_crypto_data.enabled = not G_crypto_data.enabled
+
+    if G_crypto_data.enabled then
+        G_crypto_data.price_text = G_crypto_data.text
+        G_crypto_data.last_price_text = G_crypto_data.text
+        G_crypto_data.is_suspended = false
+        G_crypto_data.is_document_closed = false
+        G_crypto_data.request_count = 0
+        if CryptoPlugin and CryptoPlugin.instance then
+            CryptoPlugin.instance:startLoop()
+            CryptoPlugin.instance:doFetch()
+        end
+        UIManager:show(InfoMessage:new{ text = "✅ Crypto ON" })
+    else
+        if CryptoPlugin and CryptoPlugin.instance then
+            CryptoPlugin.instance:stopLoop()
+        end
+        G_crypto_data.price_text = "币价已关闭"
+        UIManager:show(InfoMessage:new{ text = "❌ Crypto OFF" })
+    end
+end
+
+-- 暴露插件到全局
+CryptoPlugin = CryptoPlugin
 
 return CryptoPlugin
